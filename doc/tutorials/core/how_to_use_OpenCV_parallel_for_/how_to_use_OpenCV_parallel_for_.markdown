@@ -14,8 +14,8 @@ Goal
 ----
 
 The goal of this tutorial is to show you how to use the OpenCV `parallel_for_` framework to easily
-parallelize your code. To illustrate the concept, we will write a program to perform a convoltion operation over an image.
-The full tutorial code is [here](https://github.com/opencv/opencv/blob/master/samples/cpp/tutorial_code/core/how_to_use_OpenCV_parallel_for_/how_to_use_OpenCV_parallel_for_.cpp).
+parallelize your code. To illustrate the concept, we will write a program to perform a convolution operation over an image.
+The full tutorial code is [here]().
 
 
 Precondition
