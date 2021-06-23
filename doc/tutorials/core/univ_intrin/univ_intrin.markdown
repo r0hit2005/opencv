@@ -1,10 +1,9 @@
-How to use the OpenCV parallel_for_ to parallelize your code {#tutorial_how_to_use_OpenCV_parallel_for_}
+Universal Intrinsics {#tutorial_univ_intrin}
 ==================================================================
 
 @tableofcontents
 
-@prev_tutorial{tutorial_file_input_output_with_xml_yml}
-@next_tutorial{tutorial_univ_intrin}
+@prev_tutorial{tutorial__how_to_use_OpenCV_parallel_for_}
 
 |    |    |
 | -: | :- |
@@ -13,42 +12,51 @@ How to use the OpenCV parallel_for_ to parallelize your code {#tutorial_how_to_u
 Goal
 ----
 
-The goal of this tutorial is to show you how to use the OpenCV `parallel_for_` framework to easily
-parallelize your code. To illustrate the concept, we will write a program to perform a convoltion operation over an image.
-The full tutorial code is [here](https://github.com/opencv/opencv/blob/master/samples/cpp/tutorial_code/core/how_to_use_OpenCV_parallel_for_/how_to_use_OpenCV_parallel_for_.cpp).
+The goal of this tutorial is to provide a guide to using the Universal Intrinsics module to vectorize code for a faster runtime. 
+We'll briefly look into _SIMD intrinsics_ and how to work with wide _registers_, followed by a tutorial on how to use them to vectorize a convolution operation.
 
+Theory
+------
+
+We'll briefly look into a few concepts to better help understand the functionality. 
+
+### Intrinsics
+Intrinsics are functions which are separately handled by the compiler. As a result, these functions are often optimized to perform in the most efficient ways possible and hence run faster than normal implementations. However, since these functions depend on the compiler, it makes it difficult to write cross-platform applications. 
+
+### SIMD
+SIMD stands for **S**ingle **I**nstruction, **M**ultiple **D**ata. Compilers provide SIMD Intrinsics which allow the processor to perform a single operation on a set of data simultaneously. The data is stored in what are known as *registers*. A register may be 128bits, 256bit or 512bits wide. Depending on what *Instruction Sets* your CPU supports, you may be able to use the different registers. To learn more, look [here](https:)
+
+The Universal Intrinsics library provides macros which allow the user to write fallback code to make sure applications work regardless of the platform and the hardware. However, runtimes may differ.
 
 Precondition
 ----
 
-### Parallel Frameworks
 The first precondition is to have OpenCV built with a parallel framework.
-In OpenCV 4.5, the following parallel frameworks are available in that order:
-
+In OpenCV 3.2, the following parallel frameworks are available in that order:
 1.   Intel Threading Building Blocks (3rdparty library, should be explicitly enabled)
 2.   C= Parallel C/C++ Programming Language Extension (3rdparty library, should be explicitly enabled)
 3.   OpenMP (integrated to compiler, should be explicitly enabled)
 4.   APPLE GCD (system wide, used automatically (APPLE only))
 5.   Windows RT concurrency (system wide, used automatically (Windows RT only))
 6.   Windows concurrency (part of runtime, used automatically (Windows only - MSVC++ >= 10))
-7.   Pthreads
-8.   Add more after checking
+7.   Pthreads (if available)
 
-As you can see, several parallel frameworks can be used in the OpenCV library. Some parallel libraries(e.g. TBB, C=) are third party libraries and have to be explicitly enabled in CMake before building, while others are automatically available with the platform (e.g. APPLE GCD). 
+As you can see, several parallel frameworks can be used in the OpenCV library. Some parallel libraries
+are third party libraries and have to be explicitly built and enabled in CMake (e.g. TBB, C=), others are
+automatically available with the platform (e.g. APPLE GCD) but chances are that you should be enable to
+have access to a parallel framework either directly or by enabling the option in CMake and rebuild the library.
 
+The second (weak) precondition is more related to the task you want to achieve as not all computations
+are suitable / can be adapted to be run in a parallel way. To remain simple, tasks that can be split
+into multiple elementary operations with no memory dependency (no possible race condition) are easily
+parallelizable. Computer vision processing are often easily parallelizable as most of the time the processing of
+one pixel does not depend to the state of other pixels.
 
-### Race Conditions
-Race conditions occur when more than one thread try to write *or* read and write to a particular memory location simultaneously. 
-Base on that, we can broadly classify algorithms into two categories:- 
-1. Algorithms in which only a single thread writes data to a particular memory location.  In *convolution*, for example, even though multiple  threads may read from a pixel at a particular time, only a single thread *writes* to a particular pixel.
-<br>
-2. Algorithms in which multiple threads may write to a single memory location. We'll demonstrate a simple case in this tutorial.
-
-
-Convolution 
+Simple example: drawing a Mandelbrot set
 ----
 
-We will use the example of performing a convolution to demonstrate the use of parallel_for_ to parallelize the computation. This is an example of an algorithm which does not lead to a race condition.
+We will use the example of drawing a Mandelbrot set to show how from a regular sequential code you can easily adapt
+the code to parallelize the computation.
 
 Theory
 -----------
