@@ -4,7 +4,6 @@ How to use the OpenCV parallel_for_ to parallelize your code {#tutorial_how_to_u
 @tableofcontents
 
 @prev_tutorial{tutorial_file_input_output_with_xml_yml}
-@next_tutorial{tutorial_univ_intrin}
 
 |    |    |
 | -: | :- |
@@ -14,100 +13,157 @@ Goal
 ----
 
 The goal of this tutorial is to show you how to use the OpenCV `parallel_for_` framework to easily
-parallelize your code. To illustrate the concept, we will write a program to perform a convolution operation over an image.
-The full tutorial code is [here]().
-
+parallelize your code. To illustrate the concept, we will write a program to draw a Mandelbrot set
+exploiting almost all the CPU load available.
+The full tutorial code is [here](https://github.com/opencv/opencv/blob/master/samples/cpp/tutorial_code/core/how_to_use_OpenCV_parallel_for_/how_to_use_OpenCV_parallel_for_.cpp).
+If you want more information about multithreading, you will have to refer to a reference book or course as this tutorial is intended
+to remain simple.
 
 Precondition
 ----
 
-### Parallel Frameworks
 The first precondition is to have OpenCV built with a parallel framework.
-In OpenCV 4.5, the following parallel frameworks are available in that order:
+In OpenCV 3.2, the following parallel frameworks are available in that order:
+1.   Intel Threading Building Blocks (3rdparty library, should be explicitly enabled)
+2.   C= Parallel C/C++ Programming Language Extension (3rdparty library, should be explicitly enabled)
+3.   OpenMP (integrated to compiler, should be explicitly enabled)
+4.   APPLE GCD (system wide, used automatically (APPLE only))
+5.   Windows RT concurrency (system wide, used automatically (Windows RT only))
+6.   Windows concurrency (part of runtime, used automatically (Windows only - MSVC++ >= 10))
+7.   Pthreads (if available)
 
-*   Intel Threading Building Blocks (3rdparty library, should be explicitly enabled)
-*   C= Parallel C/C++ Programming Language Extension (3rdparty library, should be explicitly enabled)
-*   OpenMP (integrated to compiler, should be explicitly enabled)
-*   APPLE GCD (system wide, used automatically (APPLE only))
-*   Windows RT concurrency (system wide, used automatically (Windows RT only))
-*   Windows concurrency (part of runtime, used automatically (Windows only - MSVC++ >= 10))
-*   Pthreads
+As you can see, several parallel frameworks can be used in the OpenCV library. Some parallel libraries
+are third party libraries and have to be explicitly built and enabled in CMake (e.g. TBB, C=), others are
+automatically available with the platform (e.g. APPLE GCD) but chances are that you should be enable to
+have access to a parallel framework either directly or by enabling the option in CMake and rebuild the library.
 
-As you can see, several parallel frameworks can be used in the OpenCV library. Some parallel libraries(e.g. TBB, C=) are third party libraries and have to be explicitly enabled in CMake before building, while others are automatically available with the platform (e.g. APPLE GCD). 
+The second (weak) precondition is more related to the task you want to achieve as not all computations
+are suitable / can be adapted to be run in a parallel way. To remain simple, tasks that can be split
+into multiple elementary operations with no memory dependency (no possible race condition) are easily
+parallelizable. Computer vision processing are often easily parallelizable as most of the time the processing of
+one pixel does not depend to the state of other pixels.
 
+Simple example: drawing a Mandelbrot set
+----
 
-### Race Conditions
-Race conditions occur when more than one thread try to write *or* read and write to a particular memory location simultaneously. 
-Base on that, we can broadly classify algorithms into two categories:- 
-1. Algorithms in which only a single thread writes data to a particular memory location.  
-    * In *convolution*, for example, even though multiple  threads may read from a pixel at a particular time, only a single thread *writes* to a particular pixel.
-    * Some other example.
-<br>
-2. Algorithms in which multiple threads may write to a single memory location. 
-    * Finding contours, features, etc. Such algorithms may require each thread to add data to a global variable simultaneously. For example, when detecting features, each thread will add features of their respective parts of the image to a common vector, thus creating a race condition.
-    
-    We'll demonstrate a simple case in this tutorial.
-
-
-Convolution 
------------
-
-We will use the example of performing a convolution to demonstrate the use of parallel_for_ to parallelize the computation. This is an example of an algorithm which does not lead to a race condition.
+We will use the example of drawing a Mandelbrot set to show how from a regular sequential code you can easily adapt
+the code to parallelize the computation.
 
 Theory
-------
-Convolution is a simple mathematical operation widely used in image processing. Here, we slide a smaller matrix, called the *kernel*, over an image and a sum of the product of pixel values and corresponding values in the kernel gives us the value of the particular pixel in the output (called the anchor point of the kernel).  Based on the values in the kernel, we get different results. 
-In the example below, we use a 3x3 kernel (anchored at its center) and convolve over a 5x5 matrix to produce a 3x3 matrix. The size of the output can be altered by padding the input with suitable values.
-![Convolution Animation](images/convolution-example-matrix.gif)
-For more information about different kernels and what they do, look [here](https://docs.opencv.org/4.5.2/d7/da8/tutorial_table_of_content_imgproc.html).
+-----------
 
-For the purpose of this tutorial, we will implement the simplest form of the function which takes a grayscale image (1 channel) and an odd length square kernel and produces an output image. The operation will not be performed in-place.
+The Mandelbrot set definition has been named in tribute to the mathematician Benoit Mandelbrot by the mathematician
+Adrien Douady. It has been famous outside of the mathematics field as the image representation is an example of a
+class of fractals, a mathematical set that exhibits a repeating pattern displayed at every scale (even more, a
+Mandelbrot set is self-similar as the whole shape can be repeatedly seen at different scale). For a more in-depth
+introduction, you can look at the corresponding [Wikipedia article](https://en.wikipedia.org/wiki/Mandelbrot_set).
+Here, we will just introduce the formula to draw the Mandelbrot set (from the mentioned Wikipedia article).
 
-For an *n-sized kernel*, we will add a border of size *n/2* to handle edge cases.
+> The Mandelbrot set is the set of values of \f$ c \f$ in the complex plane for which the orbit of 0 under iteration
+> of the quadratic map
+> \f[\begin{cases} z_0 = 0 \\ z_{n+1} = z_n^2 + c \end{cases}\f]
+> remains bounded.
+> That is, a complex number \f$ c \f$ is part of the Mandelbrot set if, when starting with \f$ z_0 = 0 \f$ and applying
+> the iteration repeatedly, the absolute value of \f$ z_n \f$ remains bounded however large \f$ n \f$ gets.
+> This can also be represented as
+> \f[\limsup_{n\to\infty}|z_{n+1}|\leqslant2\f]
 
 Pseudocode
 -----------
 
+A simple algorithm to generate a representation of the Mandelbrot set is called the
+["escape time algorithm"](https://en.wikipedia.org/wiki/Mandelbrot_set#Escape_time_algorithm).
+For each pixel in the rendered image, we test using the recurrence relation if the complex number is bounded or not
+under a maximum number of iterations. Pixels that do not belong to the Mandelbrot set will escape quickly whereas
+we assume that the pixel is in the set after a fixed maximum number of iterations. A high value of iterations will
+produce a more detailed image but the computation time will increase accordingly. We use the number of iterations
+needed to "escape" to depict the pixel value in the image.
+
 ```
-InputImage src, OutputImage dst, kernel(size n)
-makeborder(src, n/2)
-for each pixel (i, j) strictly inside borders, do:
+For each pixel (Px, Py) on the screen, do:
 {
-    sum := 0
-    for k := -n/2 to n/2, do:
-        for l := -n/2 to n/2, do:
-            sum += kernel[n + k][n + l]*src[i + k][j + l]
-        
-    dst[i][j] := sum
+  x0 = scaled x coordinate of pixel (scaled to lie in the Mandelbrot X scale (-2, 1))
+  y0 = scaled y coordinate of pixel (scaled to lie in the Mandelbrot Y scale (-1, 1))
+  x = 0.0
+  y = 0.0
+  iteration = 0
+  max_iteration = 1000
+  while (x*x + y*y < 2*2  AND  iteration < max_iteration) {
+    xtemp = x*x - y*y + x0
+    y = 2*x*y + y0
+    x = xtemp
+    iteration = iteration + 1
+  }
+  color = palette[iteration]
+  plot(Px, Py, color)
 }
 ```
+
+To relate between the pseudocode and the theory, we have:
+*   \f$ z = x + iy \f$
+*   \f$ z^2 = x^2 + i2xy - y^2 \f$
+*   \f$ c = x_0 + iy_0 \f$
+
+![](images/how_to_use_OpenCV_parallel_for_640px-Mandelset_hires.png)
+
+On this figure, we recall that the real part of a complex number is on the x-axis and the imaginary part on the y-axis.
+You can see that the whole shape can be repeatedly visible if we zoom at particular locations.
 
 Implementation
 -----------
 
-Sequential implementation
+Escape time algorithm implementation
 --------------------------
 
-@snippet how_to_use_OpenCV_parallel_for_.cpp convolution-sequential
+@snippet how_to_use_OpenCV_parallel_for_.cpp mandelbrot-escape-time-algorithm
 
-In this implementation, we first make a dst image with the same size as the src image and add borders to to the src image.
-We then sequentially iterate over the pixels in the src image and compute the sum over the kernel and the neighbouring pixel values. We then fill sum to the corresponding pixel in the dst image.
+Here, we used the [`std::complex`](http://en.cppreference.com/w/cpp/numeric/complex) template class to represent a
+complex number. This function performs the test to check if the pixel is in set or not and returns the "escaped" iteration.
 
-
-Parallel implementation
+Sequential Mandelbrot implementation
 --------------------------
 
-When looking at the sequential implementation, we can notice that each pixel depends on multiple neighbouring pixels but only one pixel is edited at a time. Thus, to optimize the computation, we can split the image into strips and parallely perform convolution on each, by exploiting the multi-core architecture of modern processor. The OpenCV @ref cv::parallel_for_ framework automatically decides how to split the computation efficiently and does most of the work for us.
+@snippet how_to_use_OpenCV_parallel_for_.cpp mandelbrot-sequential
 
-@note Although values of a pixel in a particular strip may depend on pixel values outside the strip, these are only read only operations and hence will not cause undefined behaviour.
+In this implementation, we sequentially iterate over the pixels in the rendered image to perform the test to check if the
+pixel is likely to belong to the Mandelbrot set or not.
 
-@snippet how_to_use_OpenCV_parallel_for_.cpp convolution-parallel
+Another thing to do is to transform the pixel coordinate into the Mandelbrot set space with:
+
+@snippet how_to_use_OpenCV_parallel_for_.cpp mandelbrot-transformation
+
+Finally, to assign the grayscale value to the pixels, we use the following rule:
+*   a pixel is black if it reaches the maximum number of iterations (pixel is assumed to be in the Mandelbrot set),
+*   otherwise we assign a grayscale value depending on the escaped iteration and scaled to fit the grayscale range.
+
+@snippet how_to_use_OpenCV_parallel_for_.cpp mandelbrot-grayscale-value
+
+Using a linear scale transformation is not enough to perceive the grayscale variation. To overcome this, we will boost
+the perception by using a square root scale transformation (borrowed from Jeremy D. Frens in his
+[blog post](http://www.programming-during-recess.net/2016/06/26/color-schemes-for-mandelbrot-sets/)):
+\f$ f \left( x \right) = \sqrt{\frac{x}{\text{maxIter}}} \times 255 \f$
+
+![](images/how_to_use_OpenCV_parallel_for_sqrt_scale_transformation.png)
+
+The green curve corresponds to a simple linear scale transformation, the blue one to a square root scale transformation
+and you can observe how the lowest values will be boosted when looking at the slope at these positions.
+
+Parallel Mandelbrot implementation
+--------------------------
+
+When looking at the sequential implementation, we can notice that each pixel is computed independently. To optimize the
+computation, we can perform multiple pixel calculations in parallel, by exploiting the multi-core architecture of modern
+processor. To achieve this easily, we will use the OpenCV @ref cv::parallel_for_ framework.
+
+@snippet how_to_use_OpenCV_parallel_for_.cpp mandelbrot-parallel
 
 The first thing is to declare a custom class that inherits from @ref cv::ParallelLoopBody and to override the
 `virtual void operator ()(const cv::Range& range) const`.
 
 The range in the `operator ()` represents the subset of pixels that will be treated by an individual thread.
-We have to convert the pixel index coordinate to a 2D `[row, col]` coordinate. 
+This splitting is done automatically to distribute equally the computation load. We have to convert the pixel index coordinate
+to a 2D `[row, col]` coordinate. Also note that we have to keep a reference on the mat image to be able to modify in-place
+the image.
 
 The parallel execution is called with:
 
@@ -127,8 +183,7 @@ C++ 11 standard allows to simplify the parallel implementation by get rid of the
 Results
 -----------
 
-You can find the full tutorial code [here]().
-
+You can find the full tutorial code [here](https://github.com/opencv/opencv/blob/master/samples/cpp/tutorial_code/core/how_to_use_OpenCV_parallel_for_/how_to_use_OpenCV_parallel_for_.cpp).
 The performance of the parallel implementation depends of the type of CPU you have. For instance, on 4 cores / 8 threads
 CPU, you can expect a speed-up of around 6.9X. There are many factors to explain why we do not achieve a speed-up of almost 8X.
 Main reasons should be mostly due to:
@@ -138,4 +193,4 @@ Main reasons should be mostly due to:
 
 The resulting image produced by the tutorial code (you can modify the code to use more iterations and assign a pixel color
 depending on the escaped iteration and using a color palette to get more aesthetic images):
-
+![Mandelbrot set with xMin=-2.1, xMax=0.6, yMin=-1.2, yMax=1.2, maxIterations=500](images/how_to_use_OpenCV_parallel_for_Mandelbrot.png)
