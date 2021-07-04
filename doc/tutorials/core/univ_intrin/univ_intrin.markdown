@@ -3,7 +3,7 @@ Universal Intrinsics {#tutorial_univ_intrin}
 
 @tableofcontents
 
-@prev_tutorial{tutorial__how_to_use_OpenCV_parallel_for_}
+@prev_tutorial{tutorial_how_to_use_OpenCV_parallel_for_new}
 
 |    |    |
 | -: | :- |
