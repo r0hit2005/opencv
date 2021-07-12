@@ -258,10 +258,10 @@ void conv_impl(Mat src, Mat &dst, Mat kernel)
 static void help(char* progName)
 {
     cout << endl
-        <<  "This program shows how to use the OpenCV parallel_for_ function and \n" 
-        << "compares the performance of the sequential and parallel implementations for a \n"
-        << "convolution operation\n"
-        <<  "Usage:\n"
+        <<  " This program shows how to use the OpenCV parallel_for_ function and \n" 
+        << " compares the performance of the sequential and parallel implementations for a \n"
+        << " convolution operation\n"
+        <<  " Usage:\n "
         << progName << " [image_path -- default lena.jpg] " << endl << endl;
 }
 
@@ -283,20 +283,37 @@ int main(int argc, char* argv[])
     namedWindow("Output", 1);
     imshow("Input", src);
 
-    kernel = (Mat_<double>(5, 5) <<  1, 1, 1, 1, 1, 
-                                    1, 1, 1, 1, 1, 
-                                    1, 1, 1, 1, 1, 
-                                    1, 1, 1, 1, 1, 
-                                    1, 1, 1, 1, 1);
-    kernel /= 25;
+    kernel = (Mat_<double>(3, 3) << 1, 0, -1, 
+                                    1, 0, -1, 
+                                    1, 0, -1);
+    
+    /*
+    Uncomment the kernels you want to use or write your own kernels to test out
+    performance.
+    */
 
+    /*
+    kernel = (Mat_<double>(5, 5) <<   1, 1, 1, 1, 1, 
+                                      1, 1, 1, 1, 1,
+                                      1, 1, 1, 1, 1,
+                                      1, 1, 1, 1, 1, 
+                                      1, 1, 1, 1, 1); 
+    kernel /= 100;
+    */
+
+    /*
+    kernel = (Mat_<double>(3, 3) <<  1,  1,  1, 
+                                     0,  0,  0, 
+                                    -1, -1, -1);
+    
+    */
 
     double t = (double)getTickCount();
 
     conv_seq(src, dst, kernel);
     
     t = ((double)getTickCount() - t)/getTickFrequency();
-    cout << "Sequential implementation: " << t << "s" <<endl;
+    cout << " Sequential implementation: " << t << "s" <<endl;
 
     imshow("Output", dst);
     waitKey(0);
@@ -308,10 +325,12 @@ int main(int argc, char* argv[])
     conv_parallel(src, dst, kernel);
     
     t = ((double)getTickCount() - t)/getTickFrequency();
-    cout << "Parallel Implementation: " << t << "s" << endl;
+    cout << " Parallel Implementation: " << t << "s" << endl << endl;
 
     imshow("Output", dst);
     waitKey(0);
+    imwrite("src.png", src);
+    imwrite("dst.png", dst);
 
 
     return 0;

@@ -14,7 +14,7 @@ Goal
 ----
 
 The goal of this tutorial is to demonstrate the use of the OpenCV `parallel_for_` framework to easily parallelize your code. To illustrate the concept, we will write a program to perform convolution operation over an image.
-The full tutorial code is [here](https://github.com/opencv/opencv/blob/master/samples/cpp/tutorial_code/core/how_to_use_OpenCV_parallel_for_/how_to_use_OpenCV_parallel_for_.cpp).
+The full tutorial code is [here](https://github.com/opencv/opencv/blob/master/samples/cpp/tutorial_code/core/how_to_use_OpenCV_parallel_for_/how_to_use_OpenCV_parallel_for_new.cpp).
 
 Precondition
 ----
@@ -44,7 +44,6 @@ Based on that, we can broadly classify algorithms into two categories:-
 
 2. Algorithms in which multiple threads may write to a single memory location. 
     * Finding contours, features, etc. Such algorithms may require each thread to add data to a global variable simultaneously. For example, when detecting features, each thread will add features of their respective parts of the image to a common vector, thus creating a race condition.
-    * We'll demonstrate a simple case in this tutorial. 
 
 
 Convolution 
@@ -61,7 +60,7 @@ For more information about different kernels and what they do, look [here](https
 
 For the purpose of this tutorial, we will implement the simplest form of the function which takes a grayscale image (1 channel) and an odd length square kernel and produces an output image. 
 The operation will not be performed in-place. 
-@note In order to perform in-place, the only feasible method is to create a temporary matrix, store the values, and then copy the values to the original image. 
+@note We can store a few of the relevant pixels temporarily to make sure we use the original values during the convolution and then do it in-place. However, the purpose of this tutorial is to introduce parallel_for_ function and an inplace implementation may be too complicated.
 
 
 Pseudocode
@@ -143,8 +142,13 @@ To set the number of threads, you can use: @ref cv::setNumThreads. You can also 
 Results
 -----------
 
-The resulting time taken for execution of the two implementations on a *512x512 input* with a *5x5 kernel*:
-![Results](images/results.png)
+The resulting time taken for execution of the two implementations on a 
+* *512x512 input* with a *5x5 kernel*:
+    ![Results](images/results.png)
+</br>
+
+* *512x512 input with a 3x3 kernel*
+    ![Results2](images/results2.png)
 
 The performance of the parallel implementation depends of the type of CPU you have. For instance, on 4 cores - 8 threads CPU, runtime may be 6x to 7x faster than a sequential implementation. There are many factors to explain why we do not achieve a speed-up of 8x:
 
@@ -152,9 +156,6 @@ The performance of the parallel implementation depends of the type of CPU you ha
 *   background processes running in parallel,
 *   the difference between 4 hardware cores with 2 logical threads for each core and 8 hardware cores.
 
-In the tutorial, we used a normalizing filter which produces a blurred output.
+In the tutorial, we used a horizontal gradient filter(as shown in the animation above), which produces an image highlighting the vertical edges.
 
-![inout](images/resimg.jpg)
-
-
-
+![result image](images/resimg.png)
